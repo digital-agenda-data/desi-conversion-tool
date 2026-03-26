@@ -10,7 +10,7 @@ A Python tool for extracting and processing data from Excel files with different
 ├── config.py                  # Configuration and processing rules
 ├── connectivity-survey.md     # Connectivity Survey data processing specs
 ├── egovernment-survey.md      # eGovernment Survey data processing specs
-├── pyproject.toml            # Project dependencies
+├── pyproject.toml             # Project dependencies
 ├── .input/                    # Input Excel files directory
 ├── .output/                   # Processed output files directory
 └── .examples/                 # Example manually produced outputs

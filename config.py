@@ -55,7 +55,7 @@ EGOVERNMENT_INDICATORS = {
             "D": "total",
             "E": "national",
             "F": "cross_border",
-            "G": "service_design"
+            "G": "n/a"
         }
     },
     "Digital Decade - Digital public services for businesses": {
@@ -65,24 +65,24 @@ EGOVERNMENT_INDICATORS = {
             "D": "total",
             "E": "national",
             "F": "cross_border",
-            "G": "service_design"
+            "G": "n/a"
         }
     },
     "DESI Pre-filled forms": {
         "indicator": "desi_pff",
         "output_pattern": "desi_pff_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "all_egov_le",
-            "E": "national",
-            "F": "cross_border",
-            "G": "service_design"
+            "D": "total",
+            "E": "n/a",
+            "F": "n/a",
+            "G": "n/a"
         }
     },
     "DESI Transparency": {
         "indicator": "desi_tdpd",
         "output_pattern": "desi_tdpd_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "all_egov_le",
+            "D": "total",
             "E": "service_delivery",
             "F": "personal_data",
             "G": "service_design"
@@ -95,17 +95,17 @@ EGOVERNMENT_INDICATORS = {
             "D": "total",
             "E": "national",
             "F": "cross_border",
-            "G": "service_design"
+            "G": "n/a"
         }
     },
     "DESI Mobile Friendliness": {
         "indicator": "desi_mf",
         "output_pattern": "desi_mf_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "all_egov_le",
-            "E": "national",
-            "F": "cross_border",
-            "G": "service_design"
+            "D": "total",
+            "E": "n/a",
+            "F": "n/a",
+            "G": "n/a"
         }
     }
 }
