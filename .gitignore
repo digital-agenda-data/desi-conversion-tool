@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDE settings
+.vscode
+
+# Data directories (keep empty directories in git via .gitkeep)
+.input/
+.output/
+.examples/
+!.input/.gitkeep
+!.output/.gitkeep
+!.examples/.gitkeep
