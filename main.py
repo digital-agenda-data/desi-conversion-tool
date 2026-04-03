@@ -166,20 +166,12 @@ class DESIConversionTool:
         """
         Process eGovernment files and return a dictionary of indicator-specific DataFrames.
         """
-        print(f"Processing eGovernment file: {file_path.name}")
+        print(f"Processing eGovernment {reporting_year} file: {file_path.name}")
 
         rules = config.PROCESSING_RULES["egovernment"]
 
-        # Determine period and reference_period based on reporting_year
-        if reporting_year is not None:
-            period_value = f"desi_{reporting_year}"
-            reference_period_value = reporting_year - 1
-        else:
-            # Fallback to config values
-            period_value = f"desi_{rules['reference_period'] + 1}"
-            reference_period_value = rules["reference_period"]
-
-        print(f"Using period: {period_value}, reference_period: {reference_period_value}")
+        period_value = f"desi_{reporting_year}"
+        reference_period_value = reporting_year - 1
 
         # Read the specific sheet
         df = pd.read_excel(file_path, sheet_name=rules["sheet_name"], header=None)
@@ -188,33 +180,18 @@ class DESIConversionTool:
         indicator_positions = {}
         for i, row in df.iterrows():
             cell_value = row[3]  # Column D
-            if pd.notna(cell_value) and cell_value in rules["indicators"]:
+            # if pd.notna(cell_value) and cell_value in rules["indicators"]:
+            if pd.notna(cell_value) and cell_value in config.EGOVERNMENT_INDICATORS.keys():
                 indicator_positions[cell_value] = i
 
         print(f"Found {len(indicator_positions)} indicators: {list(indicator_positions.keys())}")
-
-        # Log unusual entries in column D that may indicate new or changed indicators
-        all_d_values = df[3].dropna().unique()
-        unknown_titles = [
-            v
-            for v in all_d_values
-            if isinstance(v, str)
-            and v.strip()
-            and v not in rules["indicators"]
-            and ("DESI" in v or "Digital Decade" in v)
-            and len(v.strip()) < 120
-        ]
-        if unknown_titles:
-            print("WARNING: Found potential unknown indicator titles in column D:")
-            for title in unknown_titles:
-                print(f"  - {title}")
 
         result = {}
 
         # Process each indicator
         for indicator_name, row_idx in indicator_positions.items():
-            indicator_code = rules["indicators"][indicator_name]
-            print(f"Processing indicator: {indicator_name} -> {indicator_code}")
+            # Skip the description row and find the data start
+            start_row = row_idx + 1
 
             # Find the end of this indicator's data (next indicator or end of file)
             next_indicators = [pos for pos in indicator_positions.values() if pos > row_idx]
@@ -223,84 +200,36 @@ class DESIConversionTool:
             # Extract data for this indicator
             indicator_data = []
 
-            # Skip the description row and find the data start
-            data_start_row = row_idx + 1
-
-            # Derive breakdown mapping for this indicator, fallback to defaults
-            indicator_specific = rules.get("indicator_breakdown_mappings", {}).get(indicator_name, {})
-            default_breakdowns = rules["breakdown_mappings"]
-
-            def column_to_letter(col_idx):
-                return chr(65 + col_idx)  # 0 -> A, 1 -> B, etc.
+            # Derive breakdown mapping for this indicator
+            breakdown_mapping = config.EGOVERNMENT_INDICATORS[indicator_name]["breakdown_mappings"]
 
             # Prepare effective breakdown mapping for column index values
-            effective_breakdowns = {}
+            breakdowns = {}
             for col_idx in rules["value_columns"]:
-                col_letter = column_to_letter(col_idx)
-                if col_letter in indicator_specific:
-                    effective_breakdowns[col_idx] = indicator_specific[col_letter]
-                elif col_letter in default_breakdowns:
-                    effective_breakdowns[col_idx] = default_breakdowns[col_letter]
-
-            # Find first valid country row for this indicator
-            valid_countries = []
-            for i in range(data_start_row, end_row):
-                country_code = df.iloc[i, rules["country_column"]]
-                if pd.notna(country_code) and str(country_code).strip() not in [
-                    "",
-                    "Country",
-                ]:
-                    valid_countries.append(i)
-                    break
-
-            if not valid_countries:
-                print(
-                    f"WARNING: No country data found for indicator {indicator_name} between rows {data_start_row + 1} and {end_row}"
-                )
+                col_letter = chr(65 + col_idx)  # 0 -> A, 1 -> B, etc.
+                breakdowns[col_idx] = breakdown_mapping[col_letter]
 
             # Parse rows as data rows when country code looks productive
-            for i in range(data_start_row, end_row):
-                country_code = df.iloc[i, rules["country_column"]]
-                if pd.notna(country_code) and str(country_code).strip() not in [
-                    "",
-                    "Country",
-                ]:
-                    country_value = str(country_code).strip()
-                    if (
-                        not (len(country_value) == 2 and country_value.isalpha())
-                        and country_value != rules["eu27_aggregate"]
-                    ):
-                        # Log shapes that are unexpected while still processing if values exist
-                        has_val = any(pd.notna(df.iloc[i, col]) for col in rules["value_columns"])
-                        if has_val:
-                            print(
-                                f"WARNING: row {i + 1} has non-standard country code '{country_value}' with numeric values"
-                            )
-
-                    for col_idx, breakdown in effective_breakdowns.items():
+            for i in range(start_row, end_row):
+                country_value = df.iloc[i, rules["country_column"]]
+                ## skip secondary heading rows that don't have a country value
+                if pd.notna(country_value):
+                    country_value = str(country_value).strip()
+                    for col_idx, breakdown in breakdowns.items():
                         value = df.iloc[i, col_idx]
                         if pd.notna(value):
-                            try:
-                                # Try to convert to float
-                                numeric_value = float(value)
-                                indicator_data.append(
-                                    {
-                                        "country": country_value,
-                                        "breakdown": breakdown,
-                                        "value": numeric_value,
-                                    }
-                                )
-                            except (ValueError, TypeError):
-                                # Skip non-numeric values
-                                print(f"WARNING: row {i + 1} has non-numeric value '{value}' in col {col_idx}")
-                                continue
+                            indicator_data.append(
+                                {
+                                    "country": config.EU27_COUNTRIES.get(country_value, country_value),
+                                    "breakdown": breakdown,
+                                    "value": float(value),
+                                }
+                            )
 
+            indicator_code = config.INDICATOR_MAPPINGS[indicator_name]
             if indicator_data:
                 # Create DataFrame for this indicator
                 indicator_df = pd.DataFrame(indicator_data)
-
-                # Map EU27 aggregate
-                indicator_df["country"] = indicator_df["country"].replace(rules["eu27_aggregate"], "EU")
 
                 # Add required columns
                 indicator_df["period"] = period_value
@@ -317,7 +246,7 @@ class DESIConversionTool:
                 indicator_df = indicator_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
 
                 result[indicator_code] = indicator_df
-                print(f"  Extracted {len(indicator_df)} rows for {indicator_code}")
+                print(f"Extracted {len(indicator_df)} rows for {indicator_name} -> {indicator_code}")
 
         return result
 

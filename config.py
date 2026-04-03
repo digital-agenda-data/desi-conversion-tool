@@ -49,7 +49,8 @@ EU27_COUNTRIES = {
     "Slovenia": "SI",
     "Spain": "ES",
     "Sweden": "SE",
-    "EU27": "EU"
+    "EU27": "EU",
+    "AVERAGE_EU27": "EU",
 }
 
 # eGovernment indicator configurations
@@ -170,27 +171,9 @@ PROCESSING_RULES = {
     "egovernment": {
         "sheet_name": "8. DESI & Digital Decade",
         "header_row": None,  # No fixed header, scan dynamically
-        "indicators": {
-            # Auto-generated from EGOVERNMENT_INDICATORS - do not edit manually
-            indicator_name: indicator["indicator"] 
-            for indicator_name, indicator in EGOVERNMENT_INDICATORS.items()
-        },
-        "breakdown_mappings": {
-            "D": "total",      # Main column default
-            "E": "national",   # Additional breakdown column default
-            "F": "cross_border",
-            "G": "service_design"  # used by DESI Transparency
-        },
-        "indicator_breakdown_mappings": {
-            # Auto-generated from EGOVERNMENT_INDICATORS - do not edit manually
-            indicator_name: indicator["breakdown_mappings"]
-            for indicator_name, indicator in EGOVERNMENT_INDICATORS.items()
-            if "breakdown_mappings" in indicator
-        },
         "country_column": 1,  # Column B (0-indexed)
         "value_columns": [3, 4, 5, 6],  # Columns D, E, F, G (0-indexed)
         "unit_value": "egov_score",
-        "eu27_aggregate": "AVERAGE_EU27",  # Text to map to EU
         "output_columns": ["period", "reference_period", "country", "indicator", "breakdown", "unit", "value", "flags", "remarks"],
         "sorting": ["reference_period", "country", "breakdown"],
         "sorting_ascending": [False, True, True],
