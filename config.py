@@ -6,11 +6,17 @@ Configuration and rules for DESI Conversion Tool
 FILE_TYPE_RULES = {
     "broadband": {
         "keywords": ["broadband", "CCE", "connectivity"],
-        "description": "Broadband coverage data files (standard naming: broadband_YYYY.xlsx)"
+        "description": "Broadband coverage data files",
     },
     "egovernment": {
         "keywords": ["eGovernment"],
-        "description": "eGovernment benchmark data files (standard naming: eGovernment_YYYY.xlsx)"
+        "description": "eGovernment benchmark data files (standard naming: eGovernment_YYYY.xlsx)",
+        # Standard pattern: "eGovernment_YYYY.xlsx" (case insensitive)
+        "filename_pattern": r"^eGovernment_\d{4}\.xlsx$",
+    },
+    "egov_kpi": {
+        "keywords": ["egovKPI"],
+        "description": "eGovernment - KPIs only, with breakdowns by life event and multiple years",
     }
 }
 
@@ -111,7 +117,7 @@ EGOVERNMENT_INDICATORS = {
 }
 
 # Broadband metric configurations (combines indicator mapping and output naming)
-BROADBAND_METRICS = {
+BROADBAND_INDICATORS = {
     "FTTP": {
         "indicator": "desi_fttp",
         "output_pattern": "desi_fttp_{date}.xlsx"
@@ -130,6 +136,18 @@ BROADBAND_METRICS = {
     }
 }
 
+ALL_INDICATORS = {**EGOVERNMENT_INDICATORS, **BROADBAND_INDICATORS}
+
+INDICATOR_MAPPINGS = {
+    indicator_name: indicator_props["indicator"]
+    for indicator_name, indicator_props in ALL_INDICATORS.items()
+}
+
+OUTPUT_NAMING_PATTERNS = {
+    indicator_props["indicator"]: indicator_props["output_pattern"]
+    for indicator_name, indicator_props in ALL_INDICATORS.items()
+}
+
 # Processing rules for each file type
 PROCESSING_RULES = {
     "broadband": {
@@ -137,8 +155,6 @@ PROCESSING_RULES = {
         "header_row": 6,  # 0-indexed, so row 6 in Excel
         "columns_to_extract": ["Country", "Metric", "Geography level", "2019", "2020", "2021", "2022", "2023", "2024", "2025"],
         # year columns are pivoted in main.py based on their index in columns_to_extract [3:]
-        "eu27_countries_only": True,
-        "geography_levels": ["Total", "Rural"],  # Include both Total and Rural
         "breakdown_mapping": {
             "Total": "total_pophh",
             "Rural": "hh_deg3"
@@ -150,8 +166,6 @@ PROCESSING_RULES = {
         "output_columns": ["period", "reference_period", "country", "indicator", "breakdown", "unit", "value", "flags", "remarks"],
         "sorting": ["reference_period", "country", "breakdown"],  # All descending=False except reference_period descending=True
         "sorting_ascending": [False, True, True],  # reference_period desc, country asc, breakdown asc
-        "transformations": ["filter_eu27", "filter_geography_levels", "pivot_to_long", "map_country_codes", "map_breakdown", "add_indicator_column", "convert_values", "add_period_columns", "sort_output"],
-        "output_format": "xlsx"
     },
     "egovernment": {
         "sheet_name": "8. DESI & Digital Decade",
@@ -176,34 +190,10 @@ PROCESSING_RULES = {
         "country_column": 1,  # Column B (0-indexed)
         "value_columns": [3, 4, 5, 6],  # Columns D, E, F, G (0-indexed)
         "unit_value": "egov_score",
-        "reference_period": 2025,  # Fixed year for this dataset
         "eu27_aggregate": "AVERAGE_EU27",  # Text to map to EU
         "output_columns": ["period", "reference_period", "country", "indicator", "breakdown", "unit", "value", "flags", "remarks"],
         "sorting": ["reference_period", "country", "breakdown"],
         "sorting_ascending": [False, True, True],
-        "output_format": "xlsx"
     }
 }
 
-
-# Output naming patterns
-OUTPUT_NAMING_PATTERNS = {
-    "broadband": {
-        # Auto-generated from BROADBAND_METRICS - do not edit manually
-        metric_name: metric["output_pattern"] 
-        for metric_name, metric in BROADBAND_METRICS.items()
-    },
-    "egovernment": {
-        # Auto-generated from EGOVERNMENT_INDICATORS - do not edit manually
-        indicator["indicator"]: indicator["output_pattern"]
-        for indicator in EGOVERNMENT_INDICATORS.values()
-    },
-    "default": "processed_{basename}_{timestamp}.xlsx"
-}
-
-# Indicator name mappings for broadband metrics (deprecated - use BROADBAND_METRICS instead)
-INDICATOR_MAPPINGS = {
-    # Auto-generated from BROADBAND_METRICS - do not edit manually
-    metric_name: metric["indicator"] 
-    for metric_name, metric in BROADBAND_METRICS.items()
-}

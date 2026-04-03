@@ -31,9 +31,17 @@ class DESIConversionTool:
 
         for file_type, rules in config.FILE_TYPE_RULES.items():
             if any(keyword.lower() in filename for keyword in rules["keywords"]):
+                # Validate filename format
+                if "filename_pattern" in rules:
+                    import re
+
+                    if not re.match(rules["filename_pattern"], file_path.name, re.IGNORECASE):
+                        raise ValueError(
+                            f"File '{file_path.name}' contains keywords for '{file_type}' but does not match expected filename pattern: {rules['filename_pattern']}"
+                        )
                 return file_type
 
-        return "default"
+        raise ValueError(f"Unknown file type: '{file_path.name}'")
 
     def extract_reporting_year(self, file_path: Path) -> Optional[int]:
         """Extract reporting year from input file name if present."""
@@ -44,34 +52,7 @@ class DESIConversionTool:
             return int(match.group(1))
         return None
 
-    def process_file_generic(self, df: pd.DataFrame, filename: str, file_type: str) -> pd.DataFrame:
-        """
-        Generic file processing using configured rules.
-        """
-        print(f"Processing {filename} as {file_type} file")
-
-        if file_type not in config.PROCESSING_RULES:
-            print(f"Warning: No processing rules defined for {file_type}")
-            return df
-
-        rules = config.PROCESSING_RULES[file_type]
-
-        # Extract specified columns if defined
-        if rules["columns_to_extract"]:
-            available_columns = [col for col in rules["columns_to_extract"] if col in df.columns]
-            if available_columns:
-                df = df[available_columns]
-            else:
-                print(f"Warning: None of the specified columns {rules['columns_to_extract']} found in {filename}")
-
-        # Apply transformations (placeholder for now)
-        for transformation in rules["transformations"]:
-            # Apply transformation logic here
-            pass
-
-        return df
-
-    def process_broadband(self, file_path: Path) -> Dict[str, pd.DataFrame]:
+    def process_broadband(self, file_path: Path, reporting_year: Optional[int] = None) -> Dict[str, pd.DataFrame]:
         """
         Process broadband files and return a dictionary of metric-specific DataFrames
         in the transformed long format.
@@ -121,10 +102,7 @@ class DESIConversionTool:
         df = df[df["Country"].isin(config.EU27_COUNTRIES.keys())]
 
         # Filter to specified geography levels
-        df = df[df["Geography level"].isin(rules["geography_levels"])]
-
-        # Map country names to codes
-        df["Country"] = df["Country"].map(config.EU27_COUNTRIES)
+        df = df[df["Geography level"].isin(rules["breakdown_mapping"].keys())]
 
         # Pivot to long format
         df_long = df.melt(
@@ -145,11 +123,16 @@ class DESIConversionTool:
         # Convert reference_period to int
         df_long["reference_period"] = df_long["reference_period"].astype(int)
 
+        # Map country names to codes and rename column
+        df_long["country"] = df_long["Country"].map(config.EU27_COUNTRIES)
+
         # Map breakdown values
         df_long["breakdown"] = df_long["Geography level"].map(rules["breakdown_mapping"])
 
         # Add indicator column using specific mappings
         df_long["indicator"] = df_long["Metric"].map(config.INDICATOR_MAPPINGS)
+        # Only keep metrics that have explicit output mappings
+        df_long = df_long.dropna(subset=["indicator"])
 
         # Add unit column
         df_long["unit"] = rules["unit_value"]
@@ -165,33 +148,17 @@ class DESIConversionTool:
         df_long["remarks"] = None
 
         # Split by metric BEFORE final column operations
-        # Only process metrics that have explicit output mappings
         result = {}
-        broadband_mappings = config.OUTPUT_NAMING_PATTERNS["broadband"]
+        for indicator in df_long["indicator"].unique():
+            indicator_df = df_long[df_long["indicator"] == indicator].copy()
 
-        for metric in df_long["Metric"].unique():
-            if pd.notna(metric) and metric in broadband_mappings:
-                metric_df = df_long[df_long["Metric"] == metric].copy()
+            # Reorder columns
+            indicator_df = indicator_df[rules["output_columns"]]
 
-                # Now do the final column operations for each metric
-                column_mapping = {
-                    "Country": "country",
-                    "reference_period": "reference_period",
-                    "indicator": "indicator",
-                    "breakdown": "breakdown",
-                    "unit": "unit",
-                    "value": "value",
-                    "period": "period",
-                    "flags": "flags",
-                    "remarks": "remarks",
-                }
-                metric_df = metric_df.rename(columns=column_mapping)
-                metric_df = metric_df[rules["output_columns"]]
+            # Sort the data
+            indicator_df = indicator_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
 
-                # Sort the data
-                metric_df = metric_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
-
-                result[metric] = metric_df
+            result[indicator] = indicator_df
 
         return result
 
@@ -200,16 +167,6 @@ class DESIConversionTool:
         Process eGovernment files and return a dictionary of indicator-specific DataFrames.
         """
         print(f"Processing eGovernment file: {file_path.name}")
-
-        # Validate filename format for eGovernment benchmark files
-        import re
-
-        # Standard pattern: "eGovernment_YYYY.xlsx" (case insensitive)
-        expected_pattern = r"^eGovernment_\d{4}\.xlsx$"
-        if not re.match(expected_pattern, file_path.name, re.IGNORECASE):
-            raise ValueError(
-                f"Invalid eGovernment filename format: '{file_path.name}'. Expected format: 'eGovernment_YYYY.xlsx' (case insensitive, where YYYY is a 4-digit year)."
-            )
 
         rules = config.PROCESSING_RULES["egovernment"]
 
@@ -368,98 +325,32 @@ class DESIConversionTool:
         """Process a single Excel file."""
         try:
             file_type = self.identify_file_type(file_path)
+            reporting_year = self.extract_reporting_year(file_path)
+            process_method = getattr(self, f"process_{file_type}")
 
-            if file_type == "broadband":
-                # Broadband files return multiple DataFrames (one per metric)
-                metric_dfs = self.process_broadband(file_path)
-                for metric, df in metric_dfs.items():
-                    self.save_broadband_output(df, file_path.name, metric)
-                # Create and save consolidated output
-                self.create_consolidated_output(metric_dfs, file_path.name, file_type)
-            elif file_type == "egovernment":
-                # eGovernment files return multiple DataFrames (one per indicator)
-                reporting_year = (
-                    self.extract_reporting_year(file_path) or rules["reference_period"]
-                    if (rules := config.PROCESSING_RULES.get("egovernment"))
-                    else None
-                )
-                indicator_dfs = self.process_egovernment(file_path, reporting_year)
-                for indicator, df in indicator_dfs.items():
-                    self.save_egovernment_output(df, file_path.name, indicator, reporting_year)
-                # Create and save consolidated output
-                self.create_consolidated_output(indicator_dfs, file_path.name, file_type, reporting_year)
-            else:
-                # Other file types return a single DataFrame
-                df = pd.read_excel(file_path)
-                processed_df = self.process_file_generic(df, file_path.name, file_type)
-                if processed_df is not None:
-                    self.save_output(processed_df, file_path.name, file_type)
+            indicator_dfs = process_method(file_path, reporting_year)
+            for indicator, df in indicator_dfs.items():
+                self.save_indicators(df, indicator, reporting_year)
+            # Create and save consolidated output
+            self.save_consolidated_output(indicator_dfs, file_type, reporting_year)
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
 
-    def generate_output_filename(self, input_filename: str, file_type: str) -> str:
-        """
-        Generate output filename based on input filename and type.
-        """
-        base_name = Path(input_filename).stem
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        pattern = config.OUTPUT_NAMING_PATTERNS.get(file_type, config.OUTPUT_NAMING_PATTERNS["default"])
-
-        return pattern.format(basename=base_name, timestamp=timestamp)
-
-    def save_output(self, df: pd.DataFrame, input_filename: str, file_type: str):
-        """Save processed data to output directory."""
-        output_filename = self.generate_output_filename(input_filename, file_type)
-        output_path = self.output_dir / output_filename
-
-        df.to_excel(output_path, index=False)
-        print(f"Saved output to: {output_path}")
-
-    def save_broadband_output(self, df: pd.DataFrame, input_filename: str, metric: str):
-        """Save broadband metric-specific output to output directory."""
-        # Generate date string
+    def save_indicators(self, df: pd.DataFrame, indicator: str, reporting_year: Optional[int] = None):
+        """Save individual indicators to output directory."""
         date_str = datetime.now().strftime("%Y%m%d")
-
-        # Use the specific pattern for this metric
-        if metric in config.OUTPUT_NAMING_PATTERNS["broadband"]:
-            pattern = config.OUTPUT_NAMING_PATTERNS["broadband"][metric]
-            output_filename = pattern.format(date=date_str)
-        else:
-            # This shouldn't happen since we only process metrics with mappings
-            print(f"Warning: No output pattern defined for metric '{metric}'")
-            return
-
-        output_path = self.output_dir / output_filename
-
-        df.to_excel(output_path, index=False)
-        print(f"Saved {metric} output to: {output_path}")
-
-    def save_egovernment_output(self, df: pd.DataFrame, input_filename: str, indicator: str, reporting_year: int):
-        """Save eGovernment indicator-specific output to output directory."""
-        # Generate date string
-        date_str = datetime.now().strftime("%Y%m%d")
-
-        # Use the specific pattern for this indicator
-        if indicator in config.OUTPUT_NAMING_PATTERNS["egovernment"]:
-            pattern = config.OUTPUT_NAMING_PATTERNS["egovernment"][indicator]
-            output_filename = pattern.format(year=reporting_year, date=date_str)
-        else:
-            # This shouldn't happen since we only process indicators with mappings
-            print(f"Warning: No output pattern defined for indicator '{indicator}'")
-            return
-
+        pattern = config.OUTPUT_NAMING_PATTERNS[indicator]
+        output_filename = pattern.format(date=date_str, year=reporting_year)
         output_path = self.output_dir / output_filename
 
         df.to_excel(output_path, index=False)
         print(f"Saved {indicator} output to: {output_path}")
 
-    def create_consolidated_output(
+    def save_consolidated_output(
         self,
         metric_dfs: Dict[str, pd.DataFrame],
-        input_filename: str,
-        file_type: str = "broadband",
+        file_type: str,
         reporting_year: Optional[int] = None,
     ):
         """Create a consolidated DataFrame containing all metrics."""
@@ -473,36 +364,15 @@ class DESIConversionTool:
         rules = config.PROCESSING_RULES[file_type]
         consolidated_df = consolidated_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
 
-        # Save the consolidated output
-        self.save_consolidated_output(consolidated_df, input_filename, file_type, reporting_year)
-
-        return consolidated_df
-
-    def save_consolidated_output(
-        self,
-        df: pd.DataFrame,
-        input_filename: str,
-        file_type: str = "broadband",
-        reporting_year: Optional[int] = None,
-    ):
-        """Save consolidated output to output directory."""
-        # Generate date string
+        # Save the consolidated output to output directory
         date_str = datetime.now().strftime("%Y%m%d")
-
-        year_str = str(reporting_year) if reporting_year else ""
-
-        if file_type == "egovernment":
-            if year_str:
-                output_filename = f"desi_egovernment_consolidated_{year_str}_{date_str}.xlsx"
-            else:
-                output_filename = f"desi_egovernment_consolidated_{date_str}.xlsx"
-        else:
-            output_filename = f"desi_broadband_consolidated_{date_str}.xlsx"
-
+        year_str = f"_{reporting_year}" if reporting_year else ""
+        output_filename = f"desi_{file_type}_consolidated{year_str}_{date_str}.xlsx"
         output_path = self.output_dir / output_filename
 
-        df.to_excel(output_path, index=False)
+        consolidated_df.to_excel(output_path, index=False)
         print(f"Saved consolidated {file_type} output to: {output_path}")
+
 
     def run(self):
         """Main processing function."""

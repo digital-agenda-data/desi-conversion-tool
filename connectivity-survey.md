@@ -6,8 +6,6 @@ This document describes the processing rules and specifications for **Connectivi
 
 **File Type:** "broadband" (identified by keywords: "broadband", "CCE", "connectivity")
 
-**Standard Filename Pattern:** `broadband_YYYY.xlsx` (case insensitive, where YYYY is the reporting year)
-
 ## Input Processing
 
 - **Source Sheet:** "Data (%)" from Excel files
@@ -18,10 +16,12 @@ This document describes the processing rules and specifications for **Connectivi
 ## Data Transformations
 
 ### Pivot Operation
+
 - **Input Format:** Wide format with Country + Year columns
 - **Output Format:** Long format with one row per country/year/metric combination
 
 ### Column Mappings
+
 - **Country Names:** Converted to ISO country codes (AT, BE, BG, etc.)
 - **Geography Levels:**
   - "Total" → "total_pophh"
@@ -29,11 +29,12 @@ This document describes the processing rules and specifications for **Connectivi
 - **Values:** Multiplied by 100 (decimal 0.918 → percentage 91.8)
 
 ### New Columns Added
+
 - `period`: "desi_" + (year + 1) e.g., "desi_2025" for reference year 2024
 - `reference_period`: The actual year (2019, 2020, etc.)
 - `indicator`: "desi_" + cleaned metric name (e.g., "desi_fttp")
 - `unit`: "pc_hh" for all rows
-- `flags` & `remarks`: Empty columns (reserved for future use)
+- `flags` & `remarks`: Empty columns
 
 ## Output Format
 
@@ -79,7 +80,7 @@ period     reference_period  country  indicator            breakdown   unit   va
 desi_2026         2025         AT     desi_vhcn            hh_deg3    pc_hh  42.05   NaN    NaN
 desi_2026         2025         AT     desi_fttp            hh_deg3    pc_hh  36.96   NaN    NaN
 desi_2026         2025         AT     desi_5gcov           hh_deg3    pc_hh  98.90   NaN    NaN
-desi_2026         2025         AT     desi_5gcov_3400_3800 hh_deg3   pc_hh  53.22   NaN    NaN
+desi_2026         2025         AT     desi_5gcov_3400_3800 hh_deg3    pc_hh  53.22   NaN    NaN
 ...
 ```
 

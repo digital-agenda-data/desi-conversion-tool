@@ -6,9 +6,7 @@ This document describes the processing rules and specifications for **eGovernmen
 
 **File Type:** "egovernment" (identified by keywords: "eGovernment")
 
-**Standard Filename Pattern:** `eGovernment_YYYY.xlsx` (case insensitive, where YYYY is the reporting year)
-
-**Validation:** Filename format is strictly validated - files must follow the exact pattern above.
+**Filename Validation Pattern:** `eGovernment_YYYY.xlsx` (case insensitive, where YYYY is the reporting year)
 
 ## Input Processing
 
@@ -20,11 +18,13 @@ This document describes the processing rules and specifications for **eGovernmen
 ## Data Transformations
 
 ### Dynamic Indicator Detection
+
 - **Scanning Method:** Searches column D for exact indicator names to locate data sections
 - **Flexible Positioning:** Indicator positions can vary between files due to explanatory text insertions
 - **Automatic Detection:** Processes all configured indicators found in the file
 
 ### Breakdown Structure
+
 Each indicator has explicit breakdown mappings for the data columns:
 
 **Default Breakdowns (used by desi_dps_cit, desi_dps_biz, desi_us):**
@@ -91,24 +91,24 @@ The following eGovernment indicators are extracted:
 ### Individual Indicator File (desi_us_2026_20260325.xlsx)
 ```
 period     reference_period  country  indicator  breakdown      unit       value  flags  remarks
-desi_2026         2025         AT     desi_us    total       egov_score  93.65   NaN    NaN
-desi_2026         2025         AT     desi_us    national    egov_score  98.41   NaN    NaN
-desi_2026         2025         AT     desi_us    cross_border egov_score 88.89   NaN    NaN
-desi_2026         2025         BE     desi_us    total       egov_score  92.86   NaN    NaN
+desi_2026         2025         AT     desi_us    total        egov_score   93.65   NaN    NaN
+desi_2026         2025         AT     desi_us    national     egov_score   98.41   NaN    NaN
+desi_2026         2025         AT     desi_us    cross_border egov_score   88.89   NaN    NaN
+desi_2026         2025         BE     desi_us    total        egov_score   92.86   NaN    NaN
 ...
 ```
 
 ### Consolidated File (desi_egovernment_consolidated_2026_20260325.xlsx)
 ```
-period     reference_period  country  indicator     breakdown      unit       value  flags  remarks
-desi_2026         2025         AT     desi_dps_biz  total       egov_score  83.73   NaN    NaN
-desi_2026         2025         AT     desi_dps_cit  total       egov_score  88.80   NaN    NaN
-desi_2026         2025         AT     desi_pff      total       egov_score  82.88   NaN    NaN
-desi_2026         2025         AT     desi_tdpd     total       egov_score  77.66   NaN    NaN
-desi_2026         2025         AT     desi_us       total       egov_score  93.65   NaN    NaN
-desi_2026         2025         AT     desi_us       national    egov_score  98.41   NaN    NaN
-desi_2026         2025         AT     desi_us       cross_border egov_score 88.89   NaN    NaN
-desi_2026         2025         AT     desi_mf       total       egov_score  99.75   NaN    NaN
+period     reference_period  country  indicator     breakdown       unit      value  flags  remarks
+desi_2026         2025         AT     desi_dps_biz  total         egov_score  83.73   NaN    NaN
+desi_2026         2025         AT     desi_dps_cit  total         egov_score  88.80   NaN    NaN
+desi_2026         2025         AT     desi_pff      total         egov_score  82.88   NaN    NaN
+desi_2026         2025         AT     desi_tdpd     total         egov_score  77.66   NaN    NaN
+desi_2026         2025         AT     desi_us       total         egov_score  93.65   NaN    NaN
+desi_2026         2025         AT     desi_us       national      egov_score  98.41   NaN    NaN
+desi_2026         2025         AT     desi_us       cross_border  egov_score  88.89   NaN    NaN
+desi_2026         2025         AT     desi_mf       total         egov_score  99.75   NaN    NaN
 ...
 ```
 
