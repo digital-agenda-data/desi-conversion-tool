@@ -134,8 +134,9 @@ BROADBAND_METRICS = {
 PROCESSING_RULES = {
     "broadband": {
         "sheet_name": "Data (%)",
-        "header_row": 5,  # 0-indexed, so row 6 in Excel
-        "columns_to_extract": ["Country", "Metric", "Geography_level", "2019", "2020", "2021", "2022", "2023", "2024", "2025"],
+        "header_row": 6,  # 0-indexed, so row 6 in Excel
+        "columns_to_extract": ["Country", "Metric", "Geography level", "2019", "2020", "2021", "2022", "2023", "2024", "2025"],
+        # year columns are pivoted in main.py based on their index in columns_to_extract [3:]
         "eu27_countries_only": True,
         "geography_levels": ["Total", "Rural"],  # Include both Total and Rural
         "breakdown_mapping": {
