@@ -6,11 +6,12 @@ and saves processed outputs to .output/ folder.
 """
 
 import pandas as pd
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
-import config
 
+import config
 
 class DESIConversionTool:
     def __init__(self, input_dir: str = ".input", output_dir: str = ".output"):
@@ -19,29 +20,19 @@ class DESIConversionTool:
         self.input_dir.mkdir(exist_ok=True)
         self.output_dir.mkdir(exist_ok=True)
 
-    def get_excel_files(self) -> List[Path]:
-        """Get all Excel files from input directory."""
-        return list(self.input_dir.glob("*.xlsx")) + list(self.input_dir.glob("*.xls"))
-
     def identify_file_type(self, file_path: Path) -> str:
         """
         Identify the type of input file based on filename or content.
         """
-        filename = file_path.stem.lower()
+        filename = file_path.name.lower()
+        file_types = []
 
         for file_type, rules in config.FILE_TYPE_RULES.items():
-            if any(keyword.lower() in filename for keyword in rules["keywords"]):
-                # Validate filename format
-                if "filename_pattern" in rules:
-                    import re
-
-                    if not re.match(rules["filename_pattern"], file_path.name, re.IGNORECASE):
-                        raise ValueError(
-                            f"File '{file_path.name}' contains keywords for '{file_type}' but does not match expected filename pattern: {rules['filename_pattern']}"
-                        )
-                return file_type
-
-        raise ValueError(f"Unknown file type: '{file_path.name}'")
+            if re.search(rules["filename_pattern"], filename, re.IGNORECASE):
+                file_types.append(file_type)
+        if len(file_types) == 0:
+            raise ValueError(f"Unknown file type: '{file_path.name}'")
+        return file_types
 
     def extract_reporting_year(self, file_path: Path) -> Optional[int]:
         """Extract reporting year from input file name if present."""
@@ -149,14 +140,15 @@ class DESIConversionTool:
 
         # Split by metric BEFORE final column operations
         result = {}
+        common_rules = config.PROCESSING_RULES["common"]
         for indicator in df_long["indicator"].unique():
             indicator_df = df_long[df_long["indicator"] == indicator].copy()
 
             # Reorder columns
-            indicator_df = indicator_df[rules["output_columns"]]
+            indicator_df = indicator_df[common_rules["output_columns"]]
 
             # Sort the data
-            indicator_df = indicator_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
+            indicator_df = indicator_df.sort_values(by=common_rules["sorting"], ascending=common_rules["sorting_ascending"])
 
             result[indicator] = indicator_df
 
@@ -227,6 +219,7 @@ class DESIConversionTool:
                             )
 
             indicator_code = config.INDICATOR_MAPPINGS[indicator_name]
+            common_rules = config.PROCESSING_RULES["common"]
             if indicator_data:
                 # Create DataFrame for this indicator
                 indicator_df = pd.DataFrame(indicator_data)
@@ -240,31 +233,37 @@ class DESIConversionTool:
                 indicator_df["remarks"] = None
 
                 # Reorder columns
-                indicator_df = indicator_df[rules["output_columns"]]
+                indicator_df = indicator_df[common_rules["output_columns"]]
 
                 # Sort the data
-                indicator_df = indicator_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
+                indicator_df = indicator_df.sort_values(by=common_rules["sorting"], ascending=common_rules["sorting_ascending"])
 
                 result[indicator_code] = indicator_df
                 print(f"Extracted {len(indicator_df)} rows for {indicator_name} -> {indicator_code}")
 
         return result
 
-    def process_file(self, file_path: Path):
-        """Process a single Excel file."""
+
+    def egov_kpi(self, file_path: Path, reporting_year: Optional[int] = None) -> Dict[str, pd.DataFrame]:
+        """
+        Process eGovernment KPI files and return a dictionary of metric-specific DataFrames
+        in the transformed long format.
+        """
+        print(f"Processing eGovernment KPI file: {file_path.name}")
+
+        rules = config.PROCESSING_RULES["broadband"]
+
+        # Validate that the expected sheet exists
         try:
-            file_type = self.identify_file_type(file_path)
-            reporting_year = self.extract_reporting_year(file_path)
-            process_method = getattr(self, f"process_{file_type}")
-
-            indicator_dfs = process_method(file_path, reporting_year)
-            for indicator, df in indicator_dfs.items():
-                self.save_indicators(df, indicator, reporting_year)
-            # Create and save consolidated output
-            self.save_consolidated_output(indicator_dfs, file_type, reporting_year)
-
+            xl = pd.ExcelFile(file_path)
+            if rules["sheet_name"] not in xl.sheet_names:
+                raise ValueError(
+                    f"Expected sheet '{rules['sheet_name']}' not found in broadband file '{file_path.name}'. Available sheets: {xl.sheet_names}"
+                )
         except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+            raise ValueError(f"Cannot read broadband file '{file_path.name}': {e}")
+
+        column_names = rules["columns_to_extract"]
 
     def save_indicators(self, df: pd.DataFrame, indicator: str, reporting_year: Optional[int] = None):
         """Save individual indicators to output directory."""
@@ -290,8 +289,10 @@ class DESIConversionTool:
         consolidated_df = pd.concat(metric_dfs.values(), ignore_index=True)
 
         # Sort the consolidated data consistently
-        rules = config.PROCESSING_RULES[file_type]
-        consolidated_df = consolidated_df.sort_values(by=rules["sorting"], ascending=rules["sorting_ascending"])
+        common_rules = config.PROCESSING_RULES["common"]
+        consolidated_df = consolidated_df.sort_values(
+            by=common_rules["sorting"], ascending=common_rules["sorting_ascending"]
+        )
 
         # Save the consolidated output to output directory
         date_str = datetime.now().strftime("%Y%m%d")
@@ -303,18 +304,30 @@ class DESIConversionTool:
         print(f"Saved consolidated {file_type} output to: {output_path}")
 
 
+    def process_file(self, file_path: Path):
+        """Process a single Excel file."""
+        try:
+            file_types = self.identify_file_type(file_path)
+            reporting_year = self.extract_reporting_year(file_path)
+            for file_type in file_types:
+                process_method = getattr(self, f"process_{file_type}")
+                indicator_dfs = process_method(file_path, reporting_year)
+                for indicator, df in indicator_dfs.items():
+                    self.save_indicators(df, indicator, reporting_year)
+                # Create and save consolidated output
+                self.save_consolidated_output(indicator_dfs, file_type, reporting_year)
+
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+
     def run(self):
         """Main processing function."""
-        excel_files = self.get_excel_files()
-
-        if not excel_files:
-            print(f"No Excel files found in {self.input_dir}")
-            return
+        excel_files = [f for f in self.input_dir.glob("*.xlsx") if not f.name.startswith("~$")]
 
         print(f"Found {len(excel_files)} Excel file(s) to process")
 
         for file_path in excel_files:
-            print(f"\nProcessing: {file_path.name}")
+            print(f"\nFound file: {file_path.name}")
             self.process_file(file_path)
 
 

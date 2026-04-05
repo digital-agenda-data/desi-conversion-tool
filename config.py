@@ -5,18 +5,20 @@ Configuration and rules for DESI Conversion Tool
 # File type identification rules
 FILE_TYPE_RULES = {
     "broadband": {
-        "keywords": ["broadband", "CCE", "connectivity"],
+        # "keywords": ["broadband", "CCE", "connectivity"],
         "description": "Broadband coverage data files",
+        "filename_pattern": r"(broadband|CCE|connectivity)",
     },
     "egovernment": {
-        "keywords": ["eGovernment"],
+        "keywords": ["eGovernment", "egov"],
         "description": "eGovernment benchmark data files (standard naming: eGovernment_YYYY.xlsx)",
         # Standard pattern: "eGovernment_YYYY.xlsx" (case insensitive)
-        "filename_pattern": r"^eGovernment_\d{4}\.xlsx$",
+        "filename_pattern": r"(eGovernment|egov).*_\d{4}\.xlsx$",
     },
     "egov_kpi": {
-        "keywords": ["egovKPI"],
+        "keywords": ["eGovernment", "egov"],
         "description": "eGovernment - KPIs only, with breakdowns by life event and multiple years",
+        "filename_pattern": r"(eGovernment|egov).*_\d{4}\.xlsx$",
     }
 }
 
@@ -153,7 +155,7 @@ OUTPUT_NAMING_PATTERNS = {
 PROCESSING_RULES = {
     "broadband": {
         "sheet_name": "Data (%)",
-        "header_row": 6,  # 0-indexed, so row 6 in Excel
+        "header_row": 6,  # 0-indexed, so row 7 in Excel
         "columns_to_extract": ["Country", "Metric", "Geography level", "2019", "2020", "2021", "2022", "2023", "2024", "2025"],
         # year columns are pivoted in main.py based on their index in columns_to_extract [3:]
         "breakdown_mapping": {
@@ -164,9 +166,6 @@ PROCESSING_RULES = {
         "indicator_prefix": "desi_",
         "unit_value": "pc_hh",
         "value_multiplier": 100,  # Convert from decimal to percentage
-        "output_columns": ["period", "reference_period", "country", "indicator", "breakdown", "unit", "value", "flags", "remarks"],
-        "sorting": ["reference_period", "country", "breakdown"],  # All descending=False except reference_period descending=True
-        "sorting_ascending": [False, True, True],  # reference_period desc, country asc, breakdown asc
     },
     "egovernment": {
         "sheet_name": "8. DESI & Digital Decade",
@@ -174,9 +173,19 @@ PROCESSING_RULES = {
         "country_column": 1,  # Column B (0-indexed)
         "value_columns": [3, 4, 5, 6],  # Columns D, E, F, G (0-indexed)
         "unit_value": "egov_score",
+    },
+    "egov_kpi": {
+        "sheet_name": "1. Scores 2026",
+        "year_row": 4,  # 0-indexed, so row 5 in Excel
+        "header_row": 5,  # 0-indexed, so row 6 in Excel
+        "country_column": 1,  # Column B (0-indexed)
+        "value_columns": range(3, 4 + 2*11),
+        "unit_value": "egov_score",
+    },
+    "common": {
         "output_columns": ["period", "reference_period", "country", "indicator", "breakdown", "unit", "value", "flags", "remarks"],
-        "sorting": ["reference_period", "country", "breakdown"],
-        "sorting_ascending": [False, True, True],
-    }
+        "sorting": ["reference_period", "indicator", "country", "breakdown"],
+        "sorting_ascending": [False, True, True, True],
+    },
 }
 
