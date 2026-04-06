@@ -8,8 +8,9 @@ A Python tool for extracting and processing data from Excel files with different
 .
 ├── main.py                    # Main application script
 ├── config.py                  # Configuration and processing rules
-├── connectivity-survey.md     # Connectivity Survey data processing specs
-├── egovernment-survey.md      # eGovernment Survey data processing specs
+├── broadband.md               # Broadband data processing specs
+├── egovernment.md             # eGovernment Survey data processing specs
+├── egov_kpi.md                # eGovernment KPI data processing specs
 ├── pyproject.toml             # Project dependencies
 ├── .input/                    # Input Excel files directory
 ├── .output/                   # Processed output files directory
@@ -85,18 +86,20 @@ pip install package-name
 
 ## File Type Identification
 
-The tool automatically identifies file types based on filename keywords defined in `config.py`. Currently supported types:
+The tool automatically identifies file types based on filename patterns defined in `config.py`. Currently supported types:
 
-- **broadband**: Files containing "broadband", "CCE", or "connectivity" in the filename (Connectivity Survey data)
+- **broadband**: Files containing "broadband", "CCE", or "connectivity" in the filename (Broadband coverage data)
   - **Standard naming:** `broadband_YYYY.xlsx` (case insensitive)
 - **egovernment**: Files containing "eGovernment" in the filename (eGovernment Survey data)
   - **Standard naming:** `eGovernment_YYYY.xlsx` (case insensitive)
-- **default**: Any other files
+- **egov_kpi**: Files containing "eGovernment" in the filename (eGovernment Survey data)
+  - **Standard naming:** `eGovernment Benchmark YYYY.xlsx` (case insensitive)
 
 For detailed processing specifications for each file type, see the respective documentation files:
 
-- [Connectivity Survey Data](connectivity-survey.md)
-- [eGovernment Survey Data](egovernment-survey.md)
+- [Broadband Data](broadband.md)
+- [eGovernment Survey Data](egovernment.md)
+- [eGovernment KPI Data](egov_kpi.md)
 
 ## Output Format
 

@@ -5,19 +5,12 @@ Configuration and rules for DESI Conversion Tool
 # File type identification rules
 FILE_TYPE_RULES = {
     "broadband": {
-        # "keywords": ["broadband", "CCE", "connectivity"],
-        "description": "Broadband coverage data files",
         "filename_pattern": r"(broadband|CCE|connectivity)",
     },
     "egovernment": {
-        "keywords": ["eGovernment", "egov"],
-        "description": "eGovernment benchmark data files (standard naming: eGovernment_YYYY.xlsx)",
-        # Standard pattern: "eGovernment_YYYY.xlsx" (case insensitive)
         "filename_pattern": r"(eGovernment|egov).*\d{4}\.xlsx$",
     },
     "egov_kpi": {
-        "keywords": ["eGovernment", "egov"],
-        "description": "eGovernment - KPIs only, with breakdowns by life event and multiple years",
         "filename_pattern": r"(eGovernment|egov).*\d{4}\.xlsx$",
     }
 }

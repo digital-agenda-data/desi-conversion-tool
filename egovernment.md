@@ -27,20 +27,16 @@ This document describes the processing rules and specifications for **eGovernmen
 
 Each indicator has explicit breakdown mappings for the data columns:
 
-**Default Breakdowns (used by desi_dps_cit, desi_dps_biz, desi_us):**
-- **Column D:** "total"
+**Total and type of user (used by desi_us):**
+- **Column D:** "egov_le_all"
 - **Column E:** "national"
 - **Column F:** "cross_border"
-- **Column G:** "service_design"
 
-**Ad-hoc Services Breakdowns (used by desi_pff, desi_mff):**
-- **Column D:** "all_egov_le"
-- **Column E:** "national"
-- **Column F:** "cross_border"
-- **Column G:** "service_design"
+**Total only (used by desi_pff, desi_mf):**
+- **Column D:** "egov_le_all"
 
-**Custom Breakdowns (used by desi_tdpd - DESI Transparency):**
-- **Column D:** "total"
+**Total and custom breakdowns (used by desi_tdpd - DESI Transparency):**
+- **Column D:** "egov_le_all"
 - **Column E:** "service_delivery"
 - **Column F:** "personal_data"
 - **Column G:** "service_design"
@@ -56,11 +52,6 @@ Not all indicators use all columns - the actual breakdowns present depend on the
 
 **Standard Columns:** period, reference_period, country, indicator, breakdown, unit, value, flags, remarks
 
-**Key Differences from Broadband:**
-- **Unit:** "egov_score" (instead of "pc_hh")
-- **Breakdowns:** "total", "national", "cross_border" (instead of geographic levels)
-- **Single Year:** Fixed reference_period of 2025
-
 **Sorting:** reference_period DESC, country ASC, breakdown ASC
 
 **File Naming:** desi_{indicator}_2026_{date}.xlsx (includes reporting year from filename)
@@ -69,12 +60,14 @@ Not all indicators use all columns - the actual breakdowns present depend on the
 
 The following eGovernment indicators are extracted:
 
-- **desi_dps_cit** → Digital Decade - Public services for citizens
-- **desi_dps_biz** → Digital Decade - Digital public services for businesses
+- **desi_dps_cit** → Digital Decade - Public services for citizens *(now processed via egov_kpi pipeline)*
+- **desi_dps_biz** → Digital Decade - Digital public services for businesses *(now processed via egov_kpi pipeline)*
 - **desi_pff** → DESI Pre-filled forms
 - **desi_tdpd** → DESI Transparency
 - **desi_us** → DESI User Support (has multiple breakdowns)
 - **desi_mf** → DESI Mobile Friendliness
+
+**Note:** `desi_dps_biz` and `desi_dps_cit` indicators are now processed through the `egov_kpi` pipeline instead of the `egovernment` pipeline. The `egov_kpi` pipeline provides more detailed breakdowns by life events and computes aggregated totals from national and cross-border scores.
 
 ## Consolidated Output
 
@@ -84,31 +77,29 @@ The following eGovernment indicators are extracted:
 
 **Row Count:** Sum of all individual indicator file rows
 
-**Breakdown Coverage:** Includes all available breakdowns (total, national, cross_border) for each indicator
+**Breakdown Coverage:** Includes all available breakdowns (egov_le_all, national, cross_border) for each indicator
 
 ## Example Output
 
 ### Individual Indicator File (desi_us_2026_20260325.xlsx)
 ```
 period     reference_period  country  indicator  breakdown      unit       value  flags  remarks
-desi_2026         2025         AT     desi_us    total        egov_score   93.65   NaN    NaN
+desi_2026         2025         AT     desi_us    egov_le_all  egov_score   93.65   NaN    NaN
 desi_2026         2025         AT     desi_us    national     egov_score   98.41   NaN    NaN
 desi_2026         2025         AT     desi_us    cross_border egov_score   88.89   NaN    NaN
-desi_2026         2025         BE     desi_us    total        egov_score   92.86   NaN    NaN
+desi_2026         2025         BE     desi_us    egov_le_all  egov_score   92.86   NaN    NaN
 ...
 ```
 
 ### Consolidated File (desi_egovernment_consolidated_2026_20260325.xlsx)
 ```
 period     reference_period  country  indicator     breakdown       unit      value  flags  remarks
-desi_2026         2025         AT     desi_dps_biz  total         egov_score  83.73   NaN    NaN
-desi_2026         2025         AT     desi_dps_cit  total         egov_score  88.80   NaN    NaN
-desi_2026         2025         AT     desi_pff      total         egov_score  82.88   NaN    NaN
-desi_2026         2025         AT     desi_tdpd     total         egov_score  77.66   NaN    NaN
-desi_2026         2025         AT     desi_us       total         egov_score  93.65   NaN    NaN
+desi_2026         2025         AT     desi_pff      egov_le_all   egov_score  82.88   NaN    NaN
+desi_2026         2025         AT     desi_tdpd     egov_le_all   egov_score  77.66   NaN    NaN
+desi_2026         2025         AT     desi_us       egov_le_all   egov_score  93.65   NaN    NaN
 desi_2026         2025         AT     desi_us       national      egov_score  98.41   NaN    NaN
 desi_2026         2025         AT     desi_us       cross_border  egov_score  88.89   NaN    NaN
-desi_2026         2025         AT     desi_mf       total         egov_score  99.75   NaN    NaN
+desi_2026         2025         AT     desi_mf       egov_le_all   egov_score  99.75   NaN    NaN
 ...
 ```
 
