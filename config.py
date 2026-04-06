@@ -13,12 +13,12 @@ FILE_TYPE_RULES = {
         "keywords": ["eGovernment", "egov"],
         "description": "eGovernment benchmark data files (standard naming: eGovernment_YYYY.xlsx)",
         # Standard pattern: "eGovernment_YYYY.xlsx" (case insensitive)
-        "filename_pattern": r"(eGovernment|egov).*_\d{4}\.xlsx$",
+        "filename_pattern": r"(eGovernment|egov).*\d{4}\.xlsx$",
     },
     "egov_kpi": {
         "keywords": ["eGovernment", "egov"],
         "description": "eGovernment - KPIs only, with breakdowns by life event and multiple years",
-        "filename_pattern": r"(eGovernment|egov).*_\d{4}\.xlsx$",
+        "filename_pattern": r"(eGovernment|egov).*\d{4}\.xlsx$",
     }
 }
 
@@ -51,32 +51,60 @@ EU27_COUNTRIES = {
     "Slovenia": "SI",
     "Spain": "ES",
     "Sweden": "SE",
+    "AT": "AT",
+    "BE": "BE",
+    "BG": "BG",
+    "HR": "HR",
+    "CY": "CY",
+    "CZ": "CZ",
+    "DK": "DK",
+    "EE": "EE",
+    "FI": "FI",
+    "FR": "FR",
+    "DE": "DE",
+    "EL": "EL",
+    "HU": "HU",
+    "IE": "IE",
+    "IT": "IT",
+    "LV": "LV",
+    "LT": "LT",
+    "LU": "LU",
+    "MT": "MT",
+    "NL": "NL",
+    "PL": "PL",
+    "PT": "PT",
+    "RO": "RO",
+    "SK": "SK",
+    "SI": "SI",
+    "ES": "ES",
+    "SE": "SE",
+    "EU": "EU",
     "EU27": "EU",
     "AVERAGE_EU27": "EU",
 }
 
 # eGovernment indicator configurations
 EGOVERNMENT_INDICATORS = {
-    "Digital Decade - Public services for citizens": {
-        "indicator": "desi_dps_cit",
-        "output_pattern": "desi_dps_cit_{year}_{date}.xlsx",
-        "breakdown_mappings": {
-            "D": "total",
-            "E": "national",
-            "F": "cross_border",
-            "G": "n/a"
-        }
-    },
-    "Digital Decade - Digital public services for businesses": {
-        "indicator": "desi_dps_biz",
-        "output_pattern": "desi_dps_biz_{year}_{date}.xlsx",
-        "breakdown_mappings": {
-            "D": "total",
-            "E": "national",
-            "F": "cross_border",
-            "G": "n/a"
-        }
-    },
+    # "Digital Decade - Public services for citizens": {
+    #     "indicator": "desi_dps_cit",
+    #     "output_pattern": "desi_dps_cit_{year}_{date}.xlsx",
+    #     "breakdown_mappings": {
+    #         "D": "total",
+    #         "E": "national",
+    #         "F": "cross_border",
+    #         "G": "n/a"
+    #     }
+    # },
+    # "Digital Decade - Digital public services for businesses": {
+    #     "indicator": "desi_dps_biz",
+    #     "output_pattern": "desi_dps_biz_{year}_{date}.xlsx",
+    #     "breakdown_mappings": {
+    #         "D": "total",
+    #         "E": "national",
+    #         "F": "cross_border",
+    #         "G": "n/a"
+    #     }
+    # },
     "DESI Pre-filled forms": {
         "indicator": "desi_pff",
         "output_pattern": "desi_pff_{year}_{date}.xlsx",
@@ -139,7 +167,18 @@ BROADBAND_INDICATORS = {
     }
 }
 
-ALL_INDICATORS = {**EGOVERNMENT_INDICATORS, **BROADBAND_INDICATORS}
+EGOV_KPI_INDICATORS = {
+    "desi_dps_biz": {
+        "indicator": "desi_dps_biz",
+        "output_pattern": "desi_dps_biz_{year}_{date}.xlsx"
+    },
+    "desi_dps_cit": {
+        "indicator": "desi_dps_cit",
+        "output_pattern": "desi_dps_cit_{year}_{date}.xlsx"
+    },
+}
+
+ALL_INDICATORS = {**EGOVERNMENT_INDICATORS, **EGOV_KPI_INDICATORS, **BROADBAND_INDICATORS}
 
 INDICATOR_MAPPINGS = {
     indicator_name: indicator_props["indicator"]
@@ -175,11 +214,24 @@ PROCESSING_RULES = {
         "unit_value": "egov_score",
     },
     "egov_kpi": {
-        "sheet_name": "1. Scores 2026",
-        "year_row": 4,  # 0-indexed, so row 5 in Excel
-        "header_row": 5,  # 0-indexed, so row 6 in Excel
+        "data_start_row": 6,  # 0-indexed, so row 7 in Excel (first data row)
         "country_column": 1,  # Column B (0-indexed)
-        "value_columns": range(3, 4 + 2*11),
+        "score_label_column": 2,  # Column C (0-indexed)
+        "breakdown_columns": list(range(6, 15)),  # Columns G-O (0-indexed) - 9 life events
+        "breakdown_mapping": {
+            # Life event labels to DESI breakdown codes
+            "Economic": "egov_le_economic",
+            "Health": "egov_le_health",
+            "Moving": "egov_le_moving",
+            "Justice": "egov_le_justice",
+            "Transport": "egov_le_transport",
+            "Business Start-Up": "egov_le_startup",
+            "Career": "egov_le_career",
+            "Family": "egov_le_family",
+            "Studying": "egov_le_studying",
+        },
+        "citizen_life_events": ["egov_le_health", "egov_le_moving", "egov_le_justice", "egov_le_transport", "egov_le_career", "egov_le_family", "egov_le_studying"],
+        "business_life_events": ["egov_le_economic", "egov_le_startup"],
         "unit_value": "egov_score",
     },
     "common": {

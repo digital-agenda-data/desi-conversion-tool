@@ -244,26 +244,136 @@ class DESIConversionTool:
         return result
 
 
-    def egov_kpi(self, file_path: Path, reporting_year: Optional[int] = None) -> Dict[str, pd.DataFrame]:
+    def process_egov_kpi(self, file_path: Path, reporting_year: Optional[int] = None) -> Dict[str, pd.DataFrame]:
         """
-        Process eGovernment KPI files and return a dictionary of metric-specific DataFrames
-        in the transformed long format.
+        Process eGovernment KPI scores and return dict of metric-specific DataFrames.
+        Extracts single year from file, applies mapping rules for desi_dps_biz and desi_dps_cit indicators.
         """
         print(f"Processing eGovernment KPI file: {file_path.name}")
 
-        rules = config.PROCESSING_RULES["broadband"]
+        rules = config.PROCESSING_RULES["egov_kpi"]
+        common_rules = config.PROCESSING_RULES["common"]
+        breakdown_mapping = rules["breakdown_mapping"]
+        reference_year = reporting_year - 1
 
-        # Validate that the expected sheet exists
-        try:
-            xl = pd.ExcelFile(file_path)
-            if rules["sheet_name"] not in xl.sheet_names:
-                raise ValueError(
-                    f"Expected sheet '{rules['sheet_name']}' not found in broadband file '{file_path.name}'. Available sheets: {xl.sheet_names}"
-                )
-        except Exception as e:
-            raise ValueError(f"Cannot read broadband file '{file_path.name}': {e}")
+        # Construct sheet name dynamically from reporting year
+        sheet_name = f"1. Scores {reporting_year}"
+        print(f"Reading sheet: {sheet_name}")
 
-        column_names = rules["columns_to_extract"]
+        # Read data starting from row 7 (index 6)
+        df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
+        df_data = df.iloc[rules["data_start_row"]:].copy()
+
+        # Extract relevant columns: country (B), score_label (C), breakdowns (G-O)
+        breakdown_labels = list(rules["breakdown_mapping"].keys())
+        df_data = df_data[[rules["country_column"], rules["score_label_column"]] + rules["breakdown_columns"]].copy()
+        df_data.columns = ["country_raw", "score_label"] + breakdown_labels
+
+        # Map country codes to EU27 country codes
+        df_data["country_code"] = df_data["country_raw"].map(config.EU27_COUNTRIES)
+
+        # Keep only rows with valid EU27 country codes
+        df_data = df_data[df_data["country_code"].notna()].copy()
+
+        print(f"Processing {len(df_data)} data rows for year {reporting_year}")
+
+        # Melt breakdown columns to long format
+        id_cols = ["country_code", "score_label"]
+        df_melted = df_data.melt(
+            id_vars=id_cols,
+            value_vars=breakdown_labels,
+            var_name="breakdown_label",
+            value_name="value"
+        )
+
+        # Map breakdown labels to breakdown codes
+        df_melted["breakdown_code"] = df_melted["breakdown_label"].map(breakdown_mapping)
+        df_melted = df_melted.dropna(subset=["value"])
+        df_melted["value"] = pd.to_numeric(df_melted["value"], errors="coerce")
+        df_melted = df_melted.dropna(subset=["value"])
+
+        # Helper function to create output rows with common fields
+        def create_output_row(country, indicator, breakdown, value):
+            return {
+                "period": f"desi_{reporting_year}",
+                "reference_period": reference_year,
+                "country": country,
+                "indicator": indicator,
+                "breakdown": breakdown,
+                "unit": rules["unit_value"],
+                "value": value,
+                "flags": None,
+                "remarks": None,
+            }
+
+        # Configuration for score label processing
+        score_label_configs = {
+            "1.1 Digital Public Services": {
+                "process_type": "individual_plus_total",
+                "indicators": ["desi_dps_biz", "desi_dps_cit"]
+            },
+            "1.1.1 Online Availability": {
+                "process_type": "average",
+                "breakdown": "national",
+                "indicators": ["desi_dps_biz", "desi_dps_cit"]
+            },
+            "1.1.2 Cross-border Online Availability": {
+                "process_type": "average",
+                "breakdown": "cross_border",
+                "indicators": ["desi_dps_biz", "desi_dps_cit"]
+            }
+        }
+
+        # Apply transformation rules based on score label
+        extracted_rows = []
+
+        # Filter to only known score labels
+        valid_score_labels = set(score_label_configs.keys())
+        df_filtered = df_melted[df_melted["score_label"].isin(valid_score_labels)].copy()
+
+        for score_label in df_filtered["score_label"].unique():
+            score_data = df_filtered[df_filtered["score_label"] == score_label].copy()
+            label_config = score_label_configs[score_label]
+
+            for country in score_data["country_code"].unique():
+                country_data = score_data[score_data["country_code"] == country]
+
+                if label_config["process_type"] == "individual_plus_total":
+                    # Individual events + total for each indicator
+                    for indicator, life_events in [("desi_dps_biz", rules["business_life_events"]),
+                                                 ("desi_dps_cit", rules["citizen_life_events"])]:
+                        # Individual events
+                        for event in life_events:
+                            if event in country_data["breakdown_code"].values:
+                                event_val = country_data[country_data["breakdown_code"] == event]["value"].values[0]
+                                extracted_rows.append(create_output_row(country, indicator, event, event_val))
+
+                        # Total average
+                        event_vals = country_data[country_data["breakdown_code"].isin(life_events)]["value"].values
+                        if len(event_vals) > 0:
+                            extracted_rows.append(create_output_row(country, indicator, "total", event_vals.mean()))
+
+                elif label_config["process_type"] == "average":
+                    # Average for each indicator with fixed breakdown
+                    for indicator, life_events in [("desi_dps_biz", rules["business_life_events"]),
+                                                 ("desi_dps_cit", rules["citizen_life_events"])]:
+                        event_vals = country_data[country_data["breakdown_code"].isin(life_events)]["value"].values
+                        if len(event_vals) > 0:
+                            extracted_rows.append(create_output_row(country, indicator, label_config["breakdown"], event_vals.mean()))
+
+        # Build result dictionary
+        result = {}
+        if extracted_rows:
+            df_all = pd.DataFrame(extracted_rows)
+            df_all = df_all[common_rules["output_columns"]]
+            df_all = df_all.sort_values(by=common_rules["sorting"], ascending=common_rules["sorting_ascending"])
+
+            for indicator in df_all["indicator"].unique():
+                indicator_df = df_all[df_all["indicator"] == indicator].copy()
+                result[indicator] = indicator_df
+                print(f"Extracted {len(indicator_df)} rows for {indicator}")
+
+        return result
 
     def save_indicators(self, df: pd.DataFrame, indicator: str, reporting_year: Optional[int] = None):
         """Save individual indicators to output directory."""
