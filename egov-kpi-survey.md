@@ -53,37 +53,13 @@ Life events are grouped into two indicator types:
 
 ### Score Label Processing
 
-Three score labels are recognized and processed with specific aggregation rules:
+Two score labels are recognized and processed with specific aggregation rules:
 
-#### 1. "1.1 Digital Public Services"
-**Processing Type:** Individual events + total average
-
-**Output Breakdowns:**
-- Individual event breakdowns (e.g., egov_le_economic, egov_le_health, etc.)
-- "total" breakdown containing the average of all life events in each group
-
-**Aggregation Logic:**
-- For each country and life event: extract individual value from raw data
-- Create separate row for each event that exists in the data
-- Calculate average across all life events in the group for "total" row
-
-**Example:**
-```
-country=AT, indicator=desi_dps_biz, breakdown=egov_le_economic, value=87.50
-country=AT, indicator=desi_dps_biz, breakdown=egov_le_startup, value=85.00
-country=AT, indicator=desi_dps_biz, breakdown=total, value=86.25 (average of economic and startup)
-
-country=AT, indicator=desi_dps_cit, breakdown=egov_le_health, value=75.60
-country=AT, indicator=desi_dps_cit, breakdown=egov_le_career, value=78.90
-... (other 5 citizen events)
-country=AT, indicator=desi_dps_cit, breakdown=total, value=76.50 (average of all 7)
-```
-
-#### 2. "1.1.1 Online Availability"
-**Processing Type:** Average with "national" breakdown
+#### 1. "1.1.1 Online Availability"
+**Processing Type:** National availability - average of life events
 
 **Output Breakdowns:**
-- "national" breakdown containing the average of all life events
+- "national" breakdown containing the average of all life events from this score label
 
 **Aggregation Logic:**
 - Calculate average across all life events in each group
@@ -91,15 +67,15 @@ country=AT, indicator=desi_dps_cit, breakdown=total, value=76.50 (average of all
 
 **Example:**
 ```
-country=AT, indicator=desi_dps_biz, breakdown=national, value=86.25
+country=AT, indicator=desi_dps_biz, breakdown=national, value=98.44
 country=AT, indicator=desi_dps_cit, breakdown=national, value=76.50
 ```
 
-#### 3. "1.1.2 Cross-border Online Availability"
-**Processing Type:** Average with "cross_border" breakdown
+#### 2. "1.1.2 Cross-border Online Availability"
+**Processing Type:** Cross-border availability - average of life events
 
 **Output Breakdowns:**
-- "cross_border" breakdown containing the average of all life events
+- "cross_border" breakdown containing the average of all life events from this score label
 
 **Aggregation Logic:**
 - Calculate average across all life events in each group
@@ -107,8 +83,27 @@ country=AT, indicator=desi_dps_cit, breakdown=national, value=76.50
 
 **Example:**
 ```
-country=AT, indicator=desi_dps_biz, breakdown=cross_border, value=86.25
-country=AT, indicator=desi_dps_cit, breakdown=cross_border, value=76.50
+country=AT, indicator=desi_dps_biz, breakdown=cross_border, value=76.94
+country=AT, indicator=desi_dps_cit, breakdown=cross_border, value=75.85
+```
+
+#### Combined Processing for Individual Life Events and Total
+
+**Individual Life Event Breakdowns:**
+- Each life event gets its own breakdown containing the average of that event from both score labels
+- Aggregation: `(value_from_1.1.1 + value_from_1.1.2) / 2`
+
+**Total Breakdown:**
+- "egov_le_biz" breakdown for desi_dps_biz containing the average of national and cross_border values
+- "egov_le_cit" breakdown for desi_dps_cit containing the average of national and cross_border values
+- Aggregation: `(national + cross_border) / 2`
+
+**Example:**
+```
+country=AT, indicator=desi_dps_biz, breakdown=egov_le_economic, value=82.22 (avg of 87.50 + 76.94)
+country=AT, indicator=desi_dps_biz, breakdown=egov_le_startup, value=81.47 (avg of 85.00 + 77.94)
+country=AT, indicator=desi_dps_biz, breakdown=egov_le_biz, value=87.69 (avg of 98.44 + 76.94)
+country=AT, indicator=desi_dps_cit, breakdown=egov_le_cit, value=76.18 (avg of 76.50 + 75.85)
 ```
 
 ## Data Extraction Pipeline
@@ -116,10 +111,14 @@ country=AT, indicator=desi_dps_cit, breakdown=cross_border, value=76.50
 1. **Read Input File:** Load Excel file with dynamically constructed sheet name
 2. **Extract Rows:** Filter to data starting from row 7, extract country, score_label, and 9 breakdowns
 3. **Map Countries:** Convert country names/codes to EU27 codes, filter to valid EU27 countries
-4. **Melt Breakdown Columns:** Convert 9 breakdown columns to long format (75+ rows per country per score label)
-5. **Map Breakdown Codes:** Convert life event labels to DESI codes
-6. **Filter Score Labels:** Pre-filter to only recognized score labels
-7. **Apply Transformations:** Process each score label with its specific aggregation rules
+4. **Filter Score Labels:** Pre-filter to only "1.1.1 Online Availability" and "1.1.2 Cross-border Online Availability"
+5. **Melt Breakdown Columns:** Convert 9 breakdown columns to long format
+6. **Map Breakdown Codes:** Convert life event labels to DESI codes
+7. **Apply Transformations:** Process data using pandas groupby operations:
+   - National: average of life events from 1.1.1
+   - Cross-border: average of life events from 1.1.2
+   - Individual events: average of each event from both score labels
+   - Total: average of national and cross-border
 8. **Combine Results:** Merge all transformations into single output per indicator
 9. **Sort and Output:** Sort by reference_period DESC, country/indicator/breakdown ASC
 
@@ -144,26 +143,29 @@ country=AT, indicator=desi_dps_cit, breakdown=cross_border, value=76.50
 Two main indicators are generated:
 
 ### desi_dps_biz (Digital Public Services - Businesses)
-- **Breakdowns per score label:**
-  - "1.1 Digital Public Services": 3 breakdowns (egov_le_economic, egov_le_startup, total)
-  - "1.1.1 Online Availability": 1 breakdown (national)
-  - "1.1.2 Cross-border Online Availability": 1 breakdown (cross_border)
-- **Total breakdowns per country:** 5 (economic, startup, total, national, cross_border)
-- **Expected rows:** 28 countries × 5 breakdowns = 140 rows (for all 3 score labels combined)
+- **Breakdowns:**
+  - "national": average of 2 life events from 1.1.1 Online Availability
+  - "cross_border": average of 2 life events from 1.1.2 Cross-border Online Availability
+  - "egov_le_economic": average of economic event from both score labels
+  - "egov_le_startup": average of startup event from both score labels
+  - "egov_le_biz": average of national and cross_border
+- **Total breakdowns per country:** 5
+- **Expected rows:** 28 countries × 5 breakdowns = 140 rows
 
 ### desi_dps_cit (Digital Public Services - Citizens)
-- **Breakdowns per score label:**
-  - "1.1 Digital Public Services": 8 breakdowns (7 individual life events + total)
-  - "1.1.1 Online Availability": 1 breakdown (national)
-  - "1.1.2 Cross-border Online Availability": 1 breakdown (cross_border)
-- **Total breakdowns per country:** 10 (7 events + total + national + cross_border)
-- **Expected rows:** 28 countries × 10 breakdowns = 280 rows (for all 3 score labels combined)
+- **Breakdowns:**
+  - "national": average of 7 life events from 1.1.1 Online Availability
+  - "cross_border": average of 7 life events from 1.1.2 Cross-border Online Availability
+  - 7 individual life events: average of each event from both score labels
+  - "egov_le_cit": average of national and cross_border
+- **Total breakdowns per country:** 10 (national + cross_border + 7 events + egov_le_cit)
+- **Expected rows:** 28 countries × 10 breakdowns = 280 rows
 
 ## Consolidated Output
 
 **File Name:** desi_egov_kpi_consolidated_{year}_{date}.xlsx
 
-**Content:** All score label transformations combined for both desi_dps_biz and desi_dps_cit
+**Content:** All transformations combined for both desi_dps_biz and desi_dps_cit
 
 **Row Count:** 140 (business) + 280 (citizen) = 420 rows per year
 
@@ -174,12 +176,12 @@ Two main indicators are generated:
 ### Individual Indicator File (desi_dps_biz_20260406.xlsx)
 ```
 period     reference_period  country  indicator  breakdown          unit       value  flags  remarks
-desi_2026         2025         AT     desi_dps_biz  egov_le_economic   egov_score  87.50   NaN    NaN
-desi_2026         2025         AT     desi_dps_biz  egov_le_startup    egov_score  85.00   NaN    NaN
-desi_2026         2025         AT     desi_dps_biz  total              egov_score  86.25   NaN    NaN
-desi_2026         2025         AT     desi_dps_biz  national           egov_score  86.30   NaN    NaN
-desi_2026         2025         AT     desi_dps_biz  cross_border       egov_score  85.95   NaN    NaN
-desi_2026         2025         BE     desi_dps_biz  egov_le_economic   egov_score  88.25   NaN    NaN
+desi_2026         2025         AT     desi_dps_biz  egov_le_economic   egov_score  82.22   NaN    NaN
+desi_2026         2025         AT     desi_dps_biz  egov_le_startup    egov_score  81.47   NaN    NaN
+desi_2026         2025         AT     desi_dps_biz  national           egov_score  98.44   NaN    NaN
+desi_2026         2025         AT     desi_dps_biz  cross_border       egov_score  76.94   NaN    NaN
+desi_2026         2025         AT     desi_dps_biz  egov_le_biz        egov_score  87.69   NaN    NaN
+desi_2026         2025         BE     desi_dps_biz  egov_le_economic   egov_score  83.15   NaN    NaN
 ...
 ```
 
@@ -193,7 +195,7 @@ desi_2026         2025         AT     desi_dps_cit  egov_le_transport egov_score
 desi_2026         2025         AT     desi_dps_cit  egov_le_career    egov_score  74.80   NaN    NaN
 desi_2026         2025         AT     desi_dps_cit  egov_le_family    egov_score  73.50   NaN    NaN
 desi_2026         2025         AT     desi_dps_cit  egov_le_studying  egov_score  77.30   NaN    NaN
-desi_2026         2025         AT     desi_dps_cit  total             egov_score  76.10   NaN    NaN
+desi_2026         2025         AT     desi_dps_cit  egov_le_cit       egov_score  76.10   NaN    NaN
 desi_2026         2025         AT     desi_dps_cit  national          egov_score  76.35   NaN    NaN
 desi_2026         2025         AT     desi_dps_cit  cross_border      egov_score  75.85   NaN    NaN
 desi_2026         2025         BE     desi_dps_cit  egov_le_health    egov_score  77.80   NaN    NaN
@@ -201,4 +203,4 @@ desi_2026         2025         BE     desi_dps_cit  egov_le_health    egov_score
 ```
 
 ## Consolidated Output (desi_egov_kpi_consolidated_2026_20260406.xlsx)
-Combines both desi_dps_biz and desi_dps_cit data into a single file with 420 rows total, sorted by reference_period, country, indicator, and breakdown.
+Combines both desi_dps_biz and desi_dps_cit data into a single file with 420 rows total, sorted by reference_period DESC, country ASC, indicator ASC, and breakdown ASC.

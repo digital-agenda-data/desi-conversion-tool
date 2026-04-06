@@ -199,7 +199,7 @@ class DESIConversionTool:
             breakdowns = {}
             for col_idx in rules["value_columns"]:
                 col_letter = chr(65 + col_idx)  # 0 -> A, 1 -> B, etc.
-                breakdowns[col_idx] = breakdown_mapping[col_letter]
+                breakdowns[col_idx] = breakdown_mapping.get(col_letter)
 
             # Parse rows as data rows when country code looks productive
             for i in range(start_row, end_row):
@@ -275,6 +275,10 @@ class DESIConversionTool:
         # Keep only rows with valid EU27 country codes
         df_data = df_data[df_data["country_code"].notna()].copy()
 
+        # Filter to only the two score labels we need for extraction
+        extract_score_labels = set(rules["score_label_mapping"].keys())
+        df_data = df_data[df_data["score_label"].isin(extract_score_labels)].copy()
+
         print(f"Processing {len(df_data)} data rows for year {reporting_year}")
 
         # Melt breakdown columns to long format
@@ -306,60 +310,54 @@ class DESIConversionTool:
                 "remarks": None,
             }
 
-        # Configuration for score label processing
-        score_label_configs = {
-            "1.1 Digital Public Services": {
-                "process_type": "individual_plus_total",
-                "indicators": ["desi_dps_biz", "desi_dps_cit"]
-            },
-            "1.1.1 Online Availability": {
-                "process_type": "average",
-                "breakdown": "national",
-                "indicators": ["desi_dps_biz", "desi_dps_cit"]
-            },
-            "1.1.2 Cross-border Online Availability": {
-                "process_type": "average",
-                "breakdown": "cross_border",
-                "indicators": ["desi_dps_biz", "desi_dps_cit"]
-            }
-        }
-
-        # Apply transformation rules based on score label
+        # STEP 1: Extract and process data using pandas operations
         extracted_rows = []
 
-        # Filter to only known score labels
-        valid_score_labels = set(score_label_configs.keys())
-        df_filtered = df_melted[df_melted["score_label"].isin(valid_score_labels)].copy()
+        # Data is already filtered to the two score labels, so use df_melted directly
+        df_extract = df_melted
 
-        for score_label in df_filtered["score_label"].unique():
-            score_data = df_filtered[df_filtered["score_label"] == score_label].copy()
-            label_config = score_label_configs[score_label]
+        # Add indicator column based on life_event (formerly event_code)
+        df_extract["indicator"] = df_extract["breakdown_code"].map(rules["life_event_to_indicator"])
+        df_extract = df_extract.dropna(subset=["indicator"])
 
-            for country in score_data["country_code"].unique():
-                country_data = score_data[score_data["country_code"] == country]
+        # STEP 2: Compute breakdowns using pandas groupby operations
 
-                if label_config["process_type"] == "individual_plus_total":
-                    # Individual events + total for each indicator
-                    for indicator, life_events in [("desi_dps_biz", rules["business_life_events"]),
-                                                 ("desi_dps_cit", rules["citizen_life_events"])]:
-                        # Individual events
-                        for event in life_events:
-                            if event in country_data["breakdown_code"].values:
-                                event_val = country_data[country_data["breakdown_code"] == event]["value"].values[0]
-                                extracted_rows.append(create_output_row(country, indicator, event, event_val))
+        # Compute national and cross-border breakdowns in one operation
+        df_score_based = (
+            df_extract.assign(breakdown=df_extract["score_label"].map(rules["score_label_mapping"]))
+            .groupby(["country_code", "indicator", "breakdown"], as_index=False)["value"]
+            .mean()
+        )
 
-                        # Total average
-                        event_vals = country_data[country_data["breakdown_code"].isin(life_events)]["value"].values
-                        if len(event_vals) > 0:
-                            extracted_rows.append(create_output_row(country, indicator, "total", event_vals.mean()))
+        # Total breakdown: average of national and cross_border (computed directly from df_score_based)
+        df_total = (
+            df_score_based.groupby(["country_code", "indicator"], as_index=False)["value"]
+            .mean()
+        )
+        df_total["breakdown"] = df_total["indicator"].map(rules["total_breakdown_mapping"])
 
-                elif label_config["process_type"] == "average":
-                    # Average for each indicator with fixed breakdown
-                    for indicator, life_events in [("desi_dps_biz", rules["business_life_events"]),
-                                                 ("desi_dps_cit", rules["citizen_life_events"])]:
-                        event_vals = country_data[country_data["breakdown_code"].isin(life_events)]["value"].values
-                        if len(event_vals) > 0:
-                            extracted_rows.append(create_output_row(country, indicator, label_config["breakdown"], event_vals.mean()))
+        # Extract individual score-based breakdowns
+        df_national = df_score_based[df_score_based["breakdown"] == "national"].copy()
+        df_cross_border = df_score_based[df_score_based["breakdown"] == "cross_border"].copy()
+
+        # Individual life event breakdowns: average of each life event from both scores
+        df_life_events = (
+            df_extract.groupby(["country_code", "indicator", "breakdown_code"], as_index=False)["value"]
+            .mean()
+            .rename(columns={"breakdown_code": "breakdown"})
+        )
+
+        # Combine all breakdowns
+        df_all_breakdowns = pd.concat([df_national, df_cross_border, df_life_events, df_total], ignore_index=True)
+
+        # Create output rows
+        for _, row in df_all_breakdowns.iterrows():
+            extracted_rows.append(create_output_row(
+                row["country_code"],
+                row["indicator"],
+                row["breakdown"],
+                row["value"]
+            ))
 
         # Build result dictionary
         result = {}
@@ -369,7 +367,7 @@ class DESIConversionTool:
             df_all = df_all.sort_values(by=common_rules["sorting"], ascending=common_rules["sorting_ascending"])
 
             for indicator in df_all["indicator"].unique():
-                indicator_df = df_all[df_all["indicator"] == indicator].copy()
+                indicator_df = df_all[df_all["indicator"] == indicator]
                 result[indicator] = indicator_df
                 print(f"Extracted {len(indicator_df)} rows for {indicator}")
 
@@ -416,19 +414,15 @@ class DESIConversionTool:
 
     def process_file(self, file_path: Path):
         """Process a single Excel file."""
-        try:
-            file_types = self.identify_file_type(file_path)
-            reporting_year = self.extract_reporting_year(file_path)
-            for file_type in file_types:
-                process_method = getattr(self, f"process_{file_type}")
-                indicator_dfs = process_method(file_path, reporting_year)
-                for indicator, df in indicator_dfs.items():
-                    self.save_indicators(df, indicator, reporting_year)
-                # Create and save consolidated output
-                self.save_consolidated_output(indicator_dfs, file_type, reporting_year)
-
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+        file_types = self.identify_file_type(file_path)
+        reporting_year = self.extract_reporting_year(file_path)
+        for file_type in file_types:
+            process_method = getattr(self, f"process_{file_type}")
+            indicator_dfs = process_method(file_path, reporting_year)
+            for indicator, df in indicator_dfs.items():
+                self.save_indicators(df, indicator, reporting_year)
+            # Create and save consolidated output
+            self.save_consolidated_output(indicator_dfs, file_type, reporting_year)
 
     def run(self):
         """Main processing function."""

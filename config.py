@@ -89,17 +89,16 @@ EGOVERNMENT_INDICATORS = {
     #     "indicator": "desi_dps_cit",
     #     "output_pattern": "desi_dps_cit_{year}_{date}.xlsx",
     #     "breakdown_mappings": {
-    #         "D": "total",
+    #         "D": "egov_le_biz",
     #         "E": "national",
     #         "F": "cross_border",
-    #         "G": "n/a"
     #     }
     # },
     # "Digital Decade - Digital public services for businesses": {
     #     "indicator": "desi_dps_biz",
     #     "output_pattern": "desi_dps_biz_{year}_{date}.xlsx",
     #     "breakdown_mappings": {
-    #         "D": "total",
+    #         "D": "egov_le_cit",
     #         "E": "national",
     #         "F": "cross_border",
     #         "G": "n/a"
@@ -109,17 +108,14 @@ EGOVERNMENT_INDICATORS = {
         "indicator": "desi_pff",
         "output_pattern": "desi_pff_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "total",
-            "E": "n/a",
-            "F": "n/a",
-            "G": "n/a"
+            "D": "egov_le_all",
         }
     },
     "DESI Transparency": {
         "indicator": "desi_tdpd",
         "output_pattern": "desi_tdpd_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "total",
+            "D": "egov_le_all",
             "E": "service_delivery",
             "F": "personal_data",
             "G": "service_design"
@@ -129,20 +125,16 @@ EGOVERNMENT_INDICATORS = {
         "indicator": "desi_us",
         "output_pattern": "desi_us_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "total",
+            "D": "egov_le_all",
             "E": "national",
             "F": "cross_border",
-            "G": "n/a"
         }
     },
     "DESI Mobile Friendliness": {
         "indicator": "desi_mf",
         "output_pattern": "desi_mf_{year}_{date}.xlsx",
         "breakdown_mappings": {
-            "D": "total",
-            "E": "n/a",
-            "F": "n/a",
-            "G": "n/a"
+            "D": "egov_le_all",
         }
     }
 }
@@ -230,8 +222,25 @@ PROCESSING_RULES = {
             "Family": "egov_le_family",
             "Studying": "egov_le_studying",
         },
-        "citizen_life_events": ["egov_le_health", "egov_le_moving", "egov_le_justice", "egov_le_transport", "egov_le_career", "egov_le_family", "egov_le_studying"],
-        "business_life_events": ["egov_le_economic", "egov_le_startup"],
+        "score_label_mapping": {
+            "1.1.1 Online Availability": "national",
+            "1.1.2 Cross-border Online Availability": "cross_border",
+        },
+        "total_breakdown_mapping": {
+            "desi_dps_biz": "egov_le_biz",
+            "desi_dps_cit": "egov_le_cit",
+        },
+        "life_event_to_indicator": {
+            "egov_le_economic": "desi_dps_biz",
+            "egov_le_startup": "desi_dps_biz",
+            "egov_le_health": "desi_dps_cit",
+            "egov_le_moving": "desi_dps_cit",
+            "egov_le_justice": "desi_dps_cit",
+            "egov_le_transport": "desi_dps_cit",
+            "egov_le_career": "desi_dps_cit",
+            "egov_le_family": "desi_dps_cit",
+            "egov_le_studying": "desi_dps_cit",
+        },
         "unit_value": "egov_score",
     },
     "common": {
